@@ -20,6 +20,7 @@ WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
+GRAY = (128, 128, 128)
 
 class Direction(Enum):
     UP = (0, -1)
@@ -27,12 +28,21 @@ class Direction(Enum):
     LEFT = (-1, 0)
     RIGHT = (1, 0)
 
+class Difficulty(Enum):
+    EASY = 5
+    MEDIUM = 10
+    HARD = 15
+
 class SnakeGame:
-    def __init__(self):
+    def __init__(self, difficulty=Difficulty.MEDIUM):
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Snake Classic Game")
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 36)
+        self.small_font = pygame.font.Font(None, 24)
+        
+        self.difficulty = difficulty
+        self.fps = difficulty.value
         
         self.reset_game()
     
@@ -43,15 +53,25 @@ class SnakeGame:
         self.snake = deque([(start_x, start_y), (start_x - 1, start_y), (start_x - 2, start_y)])
         self.direction = Direction.RIGHT
         self.next_direction = Direction.RIGHT
+        self.obstacles = self.spawn_obstacles()
         self.food = self.spawn_food()
         self.score = 0
         self.game_over = False
+    
+    def spawn_obstacles(self, num_obstacles=10):
+        obstacles = set()
+        while len(obstacles) < num_obstacles:
+            x = random.randint(0, GRID_WIDTH - 1)
+            y = random.randint(0, GRID_HEIGHT - 1)
+            if (x, y) not in self.snake and (x, y) not in obstacles:
+                obstacles.add((x, y))
+        return obstacles
     
     def spawn_food(self):
         while True:
             x = random.randint(0, GRID_WIDTH - 1)
             y = random.randint(0, GRID_HEIGHT - 1)
-            if (x, y) not in self.snake:
+            if (x, y) not in self.snake and (x, y) not in self.obstacles:
                 return (x, y)
     
     def handle_events(self):
@@ -85,14 +105,16 @@ class SnakeGame:
         dx, dy = self.direction.value
         new_head = (head_x + dx, head_y + dy)
         
-        # Check collision with walls
-        if (new_head[0] < 0 or new_head[0] >= GRID_WIDTH or
-            new_head[1] < 0 or new_head[1] >= GRID_HEIGHT):
-            self.game_over = True
-            return
+        # Wrap around walls (toroidal map)
+        new_head = (new_head[0] % GRID_WIDTH, new_head[1] % GRID_HEIGHT)
         
         # Check collision with self
         if new_head in self.snake:
+            self.game_over = True
+            return
+        
+        # Check collision with obstacles
+        if new_head in self.obstacles:
             self.game_over = True
             return
         
@@ -118,6 +140,11 @@ class SnakeGame:
             else:
                 pygame.draw.rect(self.screen, WHITE, rect)  # Body in white
         
+        # Draw obstacles
+        for x, y in self.obstacles:
+            rect = pygame.Rect(x * GRID_SIZE, y * GRID_SIZE, GRID_SIZE - 2, GRID_SIZE - 2)
+            pygame.draw.rect(self.screen, GRAY, rect)
+        
         # Draw food
         food_rect = pygame.Rect(self.food[0] * GRID_SIZE, self.food[1] * GRID_SIZE, 
                                 GRID_SIZE - 2, GRID_SIZE - 2)
@@ -132,16 +159,32 @@ class SnakeGame:
             game_over_text = self.font.render("GAME OVER! Press SPACE to restart", True, YELLOW)
             text_rect = game_over_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
             self.screen.blit(game_over_text, text_rect)
+            
+            difficulty_text = self.small_font.render(f"Difficulty: {self.difficulty.name}", True, WHITE)
+            self.screen.blit(difficulty_text, (10, WINDOW_HEIGHT - 30))
         
         pygame.display.flip()
     
     def run(self):
+        # Display difficulty menu
+        print("\n=== SNAKE GAME ===")
+        print("Select Difficulty:")
+        print("1. EASY (Speed: 5)")
+        print("2. MEDIUM (Speed: 10)")
+        print("3. HARD (Speed: 15)")
+        
+        choice = input("Enter choice (1-3) [default: 2]: ").strip() or "2"
+        
+        difficulty_map = {"1": Difficulty.EASY, "2": Difficulty.MEDIUM, "3": Difficulty.HARD}
+        self.difficulty = difficulty_map.get(choice, Difficulty.MEDIUM)
+        self.fps = self.difficulty.value
+        
         running = True
         while running:
             running = self.handle_events()
             self.update()
             self.draw()
-            self.clock.tick(FPS)
+            self.clock.tick(self.fps)
         
         pygame.quit()
 
