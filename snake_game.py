@@ -3,8 +3,9 @@ import random
 from enum import Enum
 from collections import deque
 
-# Initialize Pygame
-pygame.init()
+# pygame.init() will be invoked when a game instance is created rather
+# than at import time; this avoids side effects during testing or
+# module import.
 
 # Constants
 WINDOW_WIDTH = 800
@@ -35,6 +36,9 @@ class Difficulty(Enum):
 
 class SnakeGame:
     def __init__(self, difficulty=Difficulty.MEDIUM):
+        # initialize pygame when an instance is created; safe for imports
+        pygame.init()
+
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
         pygame.display.set_caption("Snake Classic Game")
         self.clock = pygame.time.Clock()
@@ -109,7 +113,11 @@ class SnakeGame:
         new_head = (new_head[0] % GRID_WIDTH, new_head[1] % GRID_HEIGHT)
         
         # Check collision with self
-        if new_head in self.snake:
+        # allow the snake to move into the cell currently occupied by its
+        # tail if the tail is going to be removed this tick (i.e. when food
+        # is not eaten).  this mimics the behaviour of the classic game.
+        will_grow = (new_head == self.food)
+        if new_head in self.snake and not (not will_grow and new_head == self.snake[-1]):
             self.game_over = True
             return
         
@@ -178,6 +186,9 @@ class SnakeGame:
         difficulty_map = {"1": Difficulty.EASY, "2": Difficulty.MEDIUM, "3": Difficulty.HARD}
         self.difficulty = difficulty_map.get(choice, Difficulty.MEDIUM)
         self.fps = self.difficulty.value
+        # restart the state after changing difficulty so obstacles / snake
+        # position / score are consistent with the new speed.
+        self.reset_game()
         
         running = True
         while running:
